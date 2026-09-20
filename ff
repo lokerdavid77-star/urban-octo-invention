@@ -1,0 +1,58 @@
+-- =================================================================
+-- vozoid hax - rivals
+-- =================================================================
+local ui = loadstring(game:HttpGet("https://raw.githubusercontent.com/lokerdavid77-star/urban-octo-invention/refs/heads/main/vozoidui.lua"))()
+
+local Lighting    = game:GetService("Lighting")
+local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+local UIS         = game:GetService("UserInputService")
+local Camera      = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local win = ui:Window({ Name = "vozoid hax - rivals", Size = UDim2.fromOffset(680, 520) })
+
+local main = win:Tab("Main")
+local perf = main:Section("Performance", "Left")
+perf:Toggle({ Name = "Override FPS", Flag = "OverrideFPS", Default = false,
+    Callback = function(v) print("override fps:", v) end })
+perf:Slider({ Name = "FPS Cap", Flag = "FpsCap", Min = 15, Max = 240, Default = 60,
+    Callback = function(v) print("fps cap:", v) end })
+perf:Dropdown({ Name = "Priority", Flag = "PerfPriority",
+    Values = {"Balanced","Performance","Quality"}, Default = "Balanced",
+    Callback = function(v) print("priority:", v) end })
+
+local miscSec = main:Section("Misc", "Right")
+miscSec:Button({ Name = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+    end })
+miscSec:Keybind({ Name = "Panic Key", Flag = "PanicKey", Default = Enum.KeyCode.Delete,
+    Callback = function() win:Close() end })
+
+local world = win:Tab("World")
+local light = world:Section("Lighting", "Left")
+light:Toggle({ Name = "Fullbright", Flag = "Fullbright", Default = false,
+    Callback = function(v)
+        if v then
+            Lighting.Brightness    = 2
+            Lighting.GlobalShadows = false
+            Lighting.Ambient       = Color3.new(1,1,1)
+        else
+            Lighting.Brightness    = 1
+            Lighting.GlobalShadows = true
+            Lighting.Ambient       = Color3.new(0.5,0.5,0.5)
+        end
+    end })
+light:Slider({ Name = "Time of Day", Flag = "TimeOfDay",
+    Min = 0, Max = 24, Default = 12, Decimals = 1,
+    Callback = function(v) Lighting.ClockTime = v end })
+
+local espTab = win:Tab("ESP")
+local espSec = espTab:Section("Player Boxes", "Left")
+
+local espEnabled = false
+local espConn, espGui, espFrames = nil, nil, {}
+
+local function ensureGui()
+    if espGui and espGui.Parent then return
