@@ -1,0 +1,177 @@
+-- =================================================================
+-- vozoid hax - rivals
+-- =================================================================
+local ui = loadstring(game:HttpGet("https://raw.githubusercontent.com/lokerdavid77-star/urban-octo-invention/refs/heads/main/vozoidui.lua"))()
+
+local Lighting    = game:GetService("Lighting")
+local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+local UIS         = game:GetService("UserInputService")
+local Camera      = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local win = ui:Window({ Name = "vozoid hax - rivals", Size = UDim2.fromOffset(680, 520) })
+
+-- MAIN
+local main = win:Tab("Main")
+local perf = main:Section("Performance", "Left")
+perf:Toggle({ Name = "Override FPS", Flag = "OverrideFPS", Default = false,
+    Callback = function(v) print("override fps:", v) end })
+perf:Slider({ Name = "FPS Cap", Flag = "FpsCap", Min = 15, Max = 240, Default = 60,
+    Callback = function(v) print("fps cap:", v) end })
+perf:Dropdown({ Name = "Priority", Flag = "PerfPriority",
+    Values = {"Balanced","Performance","Quality"}, Default = "Balanced",
+    Callback = function(v) print("priority:", v) end })
+
+local miscSec = main:Section("Misc", "Right")
+miscSec:Button({ Name = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+    end })
+miscSec:Keybind({ Name = "Panic Key", Flag = "PanicKey", Default = Enum.KeyCode.Delete,
+    Callback = function() win:Close() end })
+
+-- WORLD
+local world = win:Tab("World")
+local light = world:Section("Lighting", "Left")
+light:Toggle({ Name = "Fullbright", Flag = "Fullbright", Default = false,
+    Callback = function(v)
+        if v then
+            Lighting.Brightness    = 2
+            Lighting.GlobalShadows = false
+            Lighting.Ambient       = Color3.new(1,1,1)
+        else
+            Lighting.Brightness    = 1
+            Lighting.GlobalShadows = true
+            Lighting.Ambient       = Color3.new(0.5,0.5,0.5)
+        end
+    end })
+light:Slider({ Name = "Time of Day", Flag = "TimeOfDay",
+    Min = 0, Max = 24, Default = 12, Decimals = 1,
+    Callback = function(v) Lighting.ClockTime = v end })
+
+-- ESP
+local espTab = win:Tab("ESP")
+local espSec = espTab:Section("Player Boxes", "Left")
+
+local espEnabled = false
+local espConn, espGui, espFrames = nil, nil, {}
+
+local function ensureGui()
+    if espGui and espGui.Parent then return end
+    espGui = Instance.new("ScreenGui")
+    espGui.Name = "VozoidESP"
+    espGui.ResetOnSpawn = false
+    pcall(function() espGui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+end
+
+local function updateESP()
+    if not espEnabled then return end
+    ensureGui()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            local hum  = char and char:FindFirstChild("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if onScreen and pos.Z > 0 then
+                    local frame = espFrames[p]
+                    if not frame then
+                        frame = Instance.new("Frame")
+                        frame.BorderSizePixel = 0
+                        frame.BackgroundTransparency = 0.7
+                        frame.BackgroundColor3 = Color3.fromRGB(255,130,200)
+                        frame.Parent = espGui
+                        espFrames[p] = frame
+                    end
+                    local h = math.clamp(5000 / pos.Z, 20, 400)
+                    local w = h * 0.55
+                    frame.Size = UDim2.fromOffset(w, h)
+                    frame.Position = UDim2.fromOffset(pos.X - w/2, pos.Y - h/2)
+                    frame.Visible = true
+                elseif espFrames[p] then
+                    espFrames[p].Visible = false
+                end
+            elseif espFrames[p] then
+                espFrames[p].Visible = false
+            end
+        end
+    end
+end
+
+espSec:Toggle({ Name = "Enabled", Flag = "EspEnabled", Default = false,
+    Callback = function(v)
+        espEnabled = v
+        if v and not espConn then
+            espConn = RunService.RenderStepped:Connect(updateESP)
+        elseif not v and espConn then
+            espConn:Disconnect(); espConn = nil
+            for _, fr in pairs(espFrames) do fr:Destroy() end
+            espFrames = {}
+            if espGui then espGui:Destroy(); espGui = nil end
+        end
+    end })
+
+-- CHARACTER
+local charTab = win:Tab("Character")
+local charSec = charTab:Section("Movement", "Left")
+
+local flyGyro, flyVel, flyConn = nil, nil, nil
+
+local function stopFly()
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+    if flyGyro then flyGyro:Destroy(); flyGyro = nil end
+    if flyVel  then flyVel:Destroy();  flyVel  = nil end
+    local char = LocalPlayer.Character
+    local hum  = char and char:FindFirstChild("Humanoid")
+    if hum then hum.PlatformStand = false end
+end
+
+local function startFly()
+    local char = LocalPlayer.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    local hum  = char and char:FindFirstChild("Humanoid")
+    if not hrp or not hum then return end
+    hum.PlatformStand = true
+
+    flyGyro = Instance.new("BodyGyro")
+    flyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+    flyGyro.P = 10000
+    flyGyro.CFrame = hrp.CFrame
+    flyGyro.Parent = hrp
+
+    flyVel = Instance.new("BodyVelocity")
+    flyVel.MaxForce = Vector3.new(9e9,9e9,9e9)
+    flyVel.Velocity = Vector3.zero
+    flyVel.Parent = hrp
+
+    flyConn = RunService.RenderStepped:Connect(function()
+        if not flyGyro or not flyGyro.Parent then return end
+        flyGyro.CFrame = Camera.CFrame
+        local speed = tonumber(ui.Flags["FlySpeed"]) or 100
+        local move = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W)     then move = move + Camera.CFrame.LookVector  end
+        if UIS:IsKeyDown(Enum.KeyCode.S)     then move = move - Camera.CFrame.LookVector  end
+        if UIS:IsKeyDown(Enum.KeyCode.A)     then move = move - Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D)     then move = move + Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0,1,0) end
+        flyVel.Velocity = move.Magnitude > 0 and move.Unit * speed or Vector3.zero
+    end)
+end
+
+charSec:Toggle({ Name = "CFrame Fly", Flag = "Fly", Default = false,
+    Callback = function(v) if v then startFly() else stopFly() end end })
+charSec:Slider({ Name = "Fly Speed", Flag = "FlySpeed",
+    Min = 20, Max = 400, Default = 100, Decimals = 0 })
+
+-- SETTINGS
+local settings = win:Tab("Settings")
+local sess = settings:Section("Session", "Right")
+sess:Button({ Name = "Unload UI",
+    Callback = function() stopFly(); win:Destroy() end })
+sess:Input({ Name = "Session Tag", Flag = "SessionTag",
+    Default = "", Placeholder = "optional label",
+    Callback = function(v) print("tag:", v) end })
+
+print("[vozoid] loaded")
